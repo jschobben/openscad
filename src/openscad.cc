@@ -269,7 +269,7 @@ void set_render_color_scheme(const std::string color_scheme, const bool exit_if_
 	}
 }
 
-int cmdline(const char *deps_output_file, const std::string &filename, const char *output_file, const fs::path &original_path, const std::string &parameterFile, const std::string &setName, const ViewOptions& viewOptions, Camera camera, const char *export_format)
+int cmdline(const char *deps_output_file, const std::string &filename, const char *output_file, const fs::path &original_path, const std::string &parameterFile, const std::string &setName, const ViewOptions& viewOptions, Camera camera, const std::string &export_format)
 {
 	Tree tree;
 	boost::filesystem::path doc(filename);
@@ -283,12 +283,12 @@ int cmdline(const char *deps_output_file, const std::string &filename, const cha
 	std::string extsn;
 	std::string output_file_str = output_file;
 	const char *new_output_file = nullptr;
-	
-	if(export_format) {
+
+	if(!export_format.empty()) {
 		PRINT("Using extension of --export-format option");
 		extsn = export_format;
 	}
-	else { 
+	else {
 		auto suffix = fs::path(output_file_str).extension().generic_string();
 		suffix = suffix.substr(1);
 		boost::algorithm::to_lower(suffix);
@@ -514,6 +514,7 @@ Q_IMPORT_PLUGIN(qtaccessiblewidgets)
 #include "input/QGamepadInputDriver.h"
 #endif
 #include <QString>
+#include <QStringList>
 #include <QDir>
 #include <QFileInfo>
 #include <QMetaType>
@@ -682,14 +683,11 @@ int gui(vector<string> &inputFiles, const fs::path &original_path, int argc, cha
 		}
 	}
 
-	auto isMdi = settings.value("advanced/mdi", true).toBool();
-	if (isMdi) {
-		for(const auto &infile : inputFiles) {
-		   new MainWindow(assemblePath(original_path, infile));
-	    }
-	} else {
-	   new MainWindow(assemblePath(original_path, inputFiles[0]));
+	QStringList inputFilesList;
+	for(const auto &infile: inputFiles) {
+		inputFilesList.append(assemblePath(original_path, infile));
 	}
+	new MainWindow(inputFilesList);
 	app.connect(&app, SIGNAL(lastWindowClosed()), &app, SLOT(releaseQSettingsCached()));
 	app.connect(&app, SIGNAL(lastWindowClosed()), &app, SLOT(quit()));
 
@@ -821,8 +819,8 @@ int main(int argc, char **argv)
 
 	const char *output_file = nullptr;
 	const char *deps_output_file = nullptr;
-	const char *export_format = nullptr;
-	
+	std::string export_format;
+
 	ViewOptions viewOptions{};
 	po::options_description desc("Allowed options");
 	desc.add_options()
@@ -1011,15 +1009,15 @@ int main(int argc, char **argv)
 	}
 
 	ExportFileFormatOptions exportFileFormatOptions;
-    if(vm.count("export-format")) {
-        auto tmp_format = vm["export-format"].as<string>();
-        if(exportFileFormatOptions.exportFileFormats.find(tmp_format) != exportFileFormatOptions.exportFileFormats.end()) {
-        	export_format = tmp_format.c_str();
-        }
+	if(vm.count("export-format")) {
+		auto tmp_format = vm["export-format"].as<string>();
+		if(exportFileFormatOptions.exportFileFormats.find(tmp_format) != exportFileFormatOptions.exportFileFormats.end()) {
+			export_format = tmp_format;
+		}
 		else {
-	        PRINTB("Unknown --export-format option '%s' ignored. Use -h to list available options.", tmp_format.c_str());
-	    }
-    }
+			PRINTB("Unknown --export-format option '%s' ignored. Use -h to list available options.", tmp_format.c_str());
+		}
+	}
 
 	currentdir = fs::current_path().generic_string();
 

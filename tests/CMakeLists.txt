@@ -345,6 +345,7 @@ file(GLOB ISSUES_3D_FILES ${CMAKE_SOURCE_DIR}/../testdata/scad/3D/issues/*.scad)
 file(GLOB SCAD_DXF_FILES ${CMAKE_SOURCE_DIR}/../testdata/scad/dxf/*.scad)
 file(GLOB SCAD_SVG_FILES ${CMAKE_SOURCE_DIR}/../testdata/scad/svg/svg-spec/*.scad
   ${CMAKE_SOURCE_DIR}/../testdata/scad/svg/box-w-holes-2d.scad
+  ${CMAKE_SOURCE_DIR}/../testdata/scad/svg/line-cap-line-join.scad
   ${CMAKE_SOURCE_DIR}/../testdata/scad/svg/simple-center-2d.scad)
 file(GLOB SCAD_AMF_FILES ${CMAKE_SOURCE_DIR}/../testdata/scad/amf/*.scad)
 file(GLOB SCAD_NEF3_FILES ${CMAKE_SOURCE_DIR}/../testdata/scad/nef3/*.scad)
@@ -738,6 +739,11 @@ if ( ${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc")
   set(CTEST_ENVIRONMENT "${CTEST_ENVIRONMENT};GALLIUM_DRIVER=softpipe")
   set(CTEST_ENVIRONMENT "${CTEST_ENVIRONMENT};DRAW_USE_LLVM=no")
 endif()
+if ( ${CMAKE_SYSTEM_PROCESSOR} MATCHES "mips")
+  message(STATUS "Workaround MIPS bug https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=868745")
+  set(CTEST_ENVIRONMENT "${CTEST_ENVIRONMENT};GALLIUM_DRIVER=softpipe")
+  set(CTEST_ENVIRONMENT "${CTEST_ENVIRONMENT};DRAW_USE_LLVM=no")
+endif()
 
 # Set up custom commands to run before & after Ctest run.
 # 1. Start/stop Virtual Framebuffer for linux/bsd. 2. Pretty Print
@@ -819,7 +825,7 @@ list(APPEND SVG_VIEWBOX_TESTS
     viewbox_600x600_slice_xMinYMin viewbox_600x600_slice_xMinYMid viewbox_600x600_slice_xMinYMax)
 
 foreach(TEST ${SVG_VIEWBOX_TESTS})
-    add_cmdline_test(svgviewbox-${TEST} EXE ${OPENSCAD_BINPATH} ARGS --imgsize 600,600 "-Dfile=\"${CMAKE_SOURCE_DIR}/../testdata/svg/viewbox/${TEST}.svg\";" -o SUFFIX png FILES ${CMAKE_SOURCE_DIR}/../testdata/scad/svg/extruded/viewbox-test.scad)
+    add_cmdline_test(svgviewbox-${TEST} EXE ${OPENSCAD_BINPATH} ARGS --imgsize 600,600 "-Dfile=\"../../../svg/viewbox/${TEST}.svg\";" -o SUFFIX png FILES ${CMAKE_SOURCE_DIR}/../testdata/scad/svg/extruded/viewbox-test.scad)
 endforeach()
 add_cmdline_test(svgimport EXE ${OPENSCAD_BINPATH} ARGS --imgsize 600,600 -o SUFFIX png FILES ${CMAKE_SOURCE_DIR}/../testdata/scad/svg/extruded/box-w-holes.scad)
 add_cmdline_test(svgimport EXE ${OPENSCAD_BINPATH} ARGS --imgsize 600,600 -o SUFFIX png FILES ${CMAKE_SOURCE_DIR}/../testdata/scad/svg/extruded/simple-center.scad)

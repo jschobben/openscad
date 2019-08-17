@@ -96,7 +96,13 @@ AbstractNode *LinearExtrudeModule::instantiate(const Context *ctx, const ModuleI
 	}
 
 	node->layername = layer.isUndefined() ? "" : layer.toString();
-	node->convexity = static_cast<int>(convexity.toDouble());
+	height.getFiniteDouble(node->height);
+	double tmp_convexity;
+	if (convexity.getFiniteDouble(tmp_convexity)) {
+	  node->convexity = static_cast<int>(tmp_convexity);
+	} else {
+	  node->convexity = 0;
+	}
 	bool originOk = origin.getVec2(node->origin_x, node->origin_y);
 	originOk &= std::isfinite(node->origin_x) && std::isfinite(node->origin_y);
 	if(origin.isDefined() && !originOk){
@@ -177,5 +183,9 @@ std::string LinearExtrudeNode::toString() const
 void register_builtin_dxf_linear_extrude()
 {
 	Builtins::init("dxf_linear_extrude", new LinearExtrudeModule());
-	Builtins::init("linear_extrude", new LinearExtrudeModule());
+
+	Builtins::init("linear_extrude", new LinearExtrudeModule(),
+				{
+					"linear_extrude(number, center = true, convexity = 10, degrees, slices = 20, scale = 1.0 [, $fn])",
+				});
 }

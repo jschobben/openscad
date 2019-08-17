@@ -25,10 +25,11 @@ public:
 	virtual void replaceAll(const QString &findText, const QString &replaceText) = 0;
 	virtual QStringList colorSchemes() = 0;
 	virtual bool canUndo() = 0;
+	virtual void addTemplate() = 0;
 
 signals:
   void contentsChanged();
-  void modificationChanged(bool);												
+  void modificationChanged(bool, EditorInterface *);												
 
 public slots:
 	virtual void zoomIn() = 0;
@@ -51,7 +52,14 @@ public slots:
 	virtual void copy() = 0;
 	virtual void paste() = 0;
 	virtual void initFont(const QString&, uint) = 0;
+	virtual void displayTemplates() = 0;
 
 private:
 	QSize initialSizeHint;
+
+public:
+	bool contentsRendered; // Set if the source code has changes since the last render (F6)
+	int findState;
+	QString filepath;
+	std::string autoReloadId;
 };
