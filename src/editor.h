@@ -6,6 +6,7 @@
 #include <QWheelEvent>
 #include <QScrollBar>
 #include <QTextEdit>
+#include "indicatordata.h"
 
 class EditorInterface : public QWidget
 {
@@ -26,6 +27,7 @@ public:
 	virtual QStringList colorSchemes() = 0;
 	virtual bool canUndo() = 0;
 	virtual void addTemplate() = 0;
+	virtual void setIndicator(const std::vector<IndicatorData>& indicatorData) = 0;
 
 signals:
   void contentsChanged();
@@ -53,6 +55,10 @@ public slots:
 	virtual void paste() = 0;
 	virtual void initFont(const QString&, uint) = 0;
 	virtual void displayTemplates() = 0;
+	virtual void toggleBookmark() = 0;
+	virtual void nextBookmark() = 0;
+	virtual void prevBookmark() = 0;
+	virtual void jumpToNextError() = 0;
 
 private:
 	QSize initialSizeHint;
@@ -62,4 +68,5 @@ public:
 	int findState;
 	QString filepath;
 	std::string autoReloadId;
+	std::vector<IndicatorData> indicatorData;
 };

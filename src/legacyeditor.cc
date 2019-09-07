@@ -316,3 +316,23 @@ void LegacyEditor::displayTemplates()
 void LegacyEditor::addTemplate()
 {
 }
+
+void LegacyEditor::setIndicator(const std::vector<IndicatorData>&)
+{
+}
+
+void LegacyEditor::toggleBookmark()
+{
+}
+
+void LegacyEditor::nextBookmark()
+{
+}
+
+void LegacyEditor::prevBookmark()
+{
+}
+
+void LegacyEditor::jumpToNextError()
+{
+}

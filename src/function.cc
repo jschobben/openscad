@@ -29,6 +29,9 @@
 #include "expression.h"
 #include "printutils.h"
 
+#include <typeinfo>
+#include <forward_list>
+
 AbstractFunction::~AbstractFunction()
 {
 }
@@ -45,9 +48,77 @@ UserFunction::~UserFunction()
 Value UserFunction::evaluate(const Context *ctx, const EvalContext *evalctx) const
 {
 	if (!expr) return Value();
-	Context c(ctx);
-	c.setVariables(evalctx, definition_arguments);
-	return expr->evaluate(&c);
+	Context c_next(ctx); // Context for next tail call
+	c_next.setVariables(evalctx, definition_arguments);
+
+	// Outer loop: to allow tail calls
+	unsigned int counter = 0;
+	Value result;
+	while (true) {
+		// Local contexts for a call. Nested contexts must be supported, to allow variable reassignment in an inner context.
+		// I.e. "let(x=33) let(x=42) x" should evaluate to 42.
+		// Cannot use std::vector, as it invalidates raw pointers.
+		std::forward_list<Context> c_local_stack;
+		c_local_stack.emplace_front(&c_next);
+		Context *c_local = &c_local_stack.front();
+
+		// Inner loop: to follow a single execution path
+		// Before a 'break', must either assign result, or set tailCall to true.
+		shared_ptr<Expression> subExpr = expr;
+		bool tailCall = false;
+		while (true) {
+			if (!subExpr) {
+				result = Value();
+				break;
+			}
+			else if (typeid(*subExpr) == typeid(TernaryOp)) {
+				const shared_ptr<TernaryOp> &ternary = static_pointer_cast<TernaryOp>(subExpr);
+				subExpr = ternary->evaluateStep(c_local);
+			}
+			else if (typeid(*subExpr) == typeid(Assert)) {
+				const shared_ptr<Assert> &assertion = static_pointer_cast<Assert>(subExpr);
+				subExpr = assertion->evaluateStep(c_local);
+			}
+			else if (typeid(*subExpr) == typeid(Echo)) {
+				const shared_ptr<Echo> &echo = static_pointer_cast<Echo>(subExpr);
+				subExpr = echo->evaluateStep(c_local);
+			}
+			else if (typeid(*subExpr) == typeid(Let)) {
+				const shared_ptr<Let> &let = static_pointer_cast<Let>(subExpr);
+				// Start a new, nested context
+				c_local_stack.emplace_front(c_local);
+				c_local = &c_local_stack.front();
+				subExpr = let->evaluateStep(c_local);
+			}
+			else if (typeid(*subExpr) == typeid(FunctionCall)) {
+				const shared_ptr<FunctionCall> &call = static_pointer_cast<FunctionCall>(subExpr);
+				if (name == call->name) {
+					// Update c_next with new parameters for tail call
+					call->prepareTailCallContext(c_local, &c_next, definition_arguments);
+					tailCall = true;
+				}
+				else {
+					result = subExpr->evaluate(c_local);
+				}
+				break;
+			}
+			else {
+				result = subExpr->evaluate(c_local);
+				break;
+			}
+		}
+		if (!tailCall) {
+			break;
+		}
+
+		if (counter++ == 1000000){
+			std::string locs = loc.toRelativeString(ctx->documentPath());
+			PRINTB("ERROR: Recursion detected calling function '%s' %s", this->name % locs);
+			throw RecursionException::create("function", this->name,loc);
+		}
+	}
+
+	return result;
 }
 
 void UserFunction::print(std::ostream &stream, const std::string &indent) const
@@ -60,69 +131,6 @@ void UserFunction::print(std::ostream &stream, const std::string &indent) const
 		if (arg.expr) stream << " = " << *arg.expr;
 	}
 	stream << ") = " << *expr << ";\n";
-}
-
-class FunctionTailRecursion : public UserFunction
-{
-private:
-	bool invert;
-	shared_ptr<TernaryOp> op;
-	shared_ptr<FunctionCall> call;
-	shared_ptr<Expression> endexpr;
-
-public:
-	FunctionTailRecursion(const char *name, AssignmentList &definition_arguments,
-												shared_ptr<TernaryOp> expr, shared_ptr<FunctionCall> call,
-												shared_ptr<Expression> endexpr, bool invert,
-												const Location &loc)
-		: UserFunction(name, definition_arguments, expr, loc),
-			invert(invert), op(expr), call(call), endexpr(endexpr) {
-	}
-
-	~FunctionTailRecursion() { }
-
-	Value evaluate(const Context *ctx, const EvalContext *evalctx) const override {
-		if (!expr) return Value();
-		
-		Context c(ctx);
-		c.setVariables(evalctx, definition_arguments);
-		
-		EvalContext ec(&c, call->arguments, loc);
-		Context tmp(&c);
-		unsigned int counter = 0;
-		while (invert ^ this->op->cond->evaluate(&c)) {
-			tmp.setVariables(&ec, definition_arguments);
-			c.take_variables(tmp);
-			
-			if (counter++ == 1000000){
-				std::string locs = loc.toRelativeString(ctx->documentPath());
-				PRINTB("ERROR: Recursion detected calling function '%s' %s", this->name % locs);
-				throw RecursionException::create("function", this->name,loc);
-			}
-		}
-		
-		Value result = endexpr->evaluate(&c);
-		
-		return result;
-	}
-};
-
-UserFunction *UserFunction::create(const char *name, AssignmentList &definition_arguments, shared_ptr<Expression> expr, const Location &loc)
-{
-	if (shared_ptr<TernaryOp> ternary = dynamic_pointer_cast<TernaryOp>(expr)) {
-		shared_ptr<FunctionCall> ifcall = dynamic_pointer_cast<FunctionCall>(ternary->ifexpr);
-		shared_ptr<FunctionCall> elsecall = dynamic_pointer_cast<FunctionCall>(ternary->elseexpr);
-		if (ifcall && !elsecall) {
-			if (name == ifcall->name) {
-				return new FunctionTailRecursion(name, definition_arguments, ternary, ifcall, ternary->elseexpr, false, loc);
-			}
-		} else if (elsecall && !ifcall) {
-			if (name == elsecall->name) {
-				return new FunctionTailRecursion(name, definition_arguments, ternary, elsecall, ternary->ifexpr, true, loc);
-			}
-		}
-	}
-	return new UserFunction(name, definition_arguments, expr, loc);
 }
 
 BuiltinFunction::~BuiltinFunction()

@@ -227,9 +227,15 @@ TernaryOp::TernaryOp(Expression *cond, Expression *ifexpr, Expression *elseexpr,
 {
 }
 
+const shared_ptr<Expression> &TernaryOp::evaluateStep(const Context *context) const
+{
+	return this->cond->evaluate(context) ? this->ifexpr : this->elseexpr;
+}
+
 Value TernaryOp::evaluate(const Context *context) const
 {
-	return (this->cond->evaluate(context) ? this->ifexpr : this->elseexpr)->evaluate(context);
+	const shared_ptr<Expression> &nextexpr = evaluateStep(context);
+	return nextexpr->evaluate(context);
 }
 
 void TernaryOp::print(std::ostream &stream, const std::string &) const
@@ -441,6 +447,42 @@ static void NOINLINE print_trace(const FunctionCall *val, const Context *ctx){
 	PRINTB("TRACE: called by '%s', %s.", val->name % val->location().toRelativeString(ctx->documentPath()));
 }
 
+/**
+ * Evaluates call parameters using context, and assigns the resulting values to tailCallContext.
+ * As the name suggests, it's meant for basic tail recursion, where the function calls itself.
+*/
+void FunctionCall::prepareTailCallContext(const Context *context, Context *tailCallContext, const AssignmentList &definition_arguments)
+{
+	if (this->resolvedArguments.empty()) {
+		// Figure out parameter names
+		EvalContext ec(context, this->arguments, this->loc);
+		this->resolvedArguments = ec.resolveArguments(definition_arguments, {}, false);
+		// Assign default values for unspecified parameters
+		for (const auto &arg : definition_arguments) {
+			if (this->resolvedArguments.find(arg.name) == this->resolvedArguments.end()) {
+				this->defaultArguments.emplace_back(arg.name, arg.expr ? arg.expr->evaluate(context) : Value());
+			}
+		}
+	}
+
+	std::vector<std::pair<std::string, Value>> variables;
+	variables.reserve(this->defaultArguments.size() + this->resolvedArguments.size());
+	// Set default values for unspecified parameters
+	for (const auto &def : this->defaultArguments) {
+		variables.emplace_back(def.first, def.second.clone());
+	}
+	// Set the given parameters
+	for (const auto &ass : this->resolvedArguments) {
+		variables.emplace_back(ass.first, ass.second->evaluate(context));
+	}
+	// Apply to tailCallContext
+	for (const auto &var : variables) {
+		tailCallContext->set_variable(var.first, var.second.clone());
+	}
+	// Apply config variables ($...)
+	tailCallContext->apply_config_variables(context);
+}
+
 Value FunctionCall::evaluate(const Context *context) const
 {
 	if (StackCheck::inst().check()) {
@@ -485,14 +527,21 @@ Assert::Assert(const AssignmentList &args, Expression *expr, const Location &loc
 
 }
 
-Value Assert::evaluate(const Context *context) const
+const shared_ptr<Expression> &Assert::evaluateStep(const Context *context) const
 {
 	EvalContext assert_context(context, this->arguments, this->loc);
 
 	Context c(&assert_context);
 	evaluate_assert(c, &assert_context);
+	return expr;
+}
 
-	return expr ? expr->evaluate(&c) : Value();
+Value Assert::evaluate(const Context *context) const
+{
+	const shared_ptr<Expression> &nextexpr = evaluateStep(context);
+
+	Value result = nextexpr ? nextexpr->evaluate(context) : Value();
+	return result;
 }
 
 void Assert::print(std::ostream &stream, const std::string &) const
@@ -507,12 +556,18 @@ Echo::Echo(const AssignmentList &args, Expression *expr, const Location &loc)
 
 }
 
+const shared_ptr<Expression> &Echo::evaluateStep(const Context *context) const
+{
+	EvalContext echo_context(context, this->arguments, this->loc);
+	PRINTB("%s", STR("ECHO: " << echo_context));
+	return expr;
+}
+
 Value Echo::evaluate(const Context *context) const
 {
-	EvalContext echo_context(context, this->arguments, this->loc);	
-	PRINTB("%s", STR("ECHO: " << echo_context));
+	const shared_ptr<Expression> &nextexpr = evaluateStep(context);
 
-	Value result = expr ? expr->evaluate(context) : Value();
+	Value result = nextexpr ? nextexpr->evaluate(context) : Value();
 	return result;
 }
 
@@ -527,12 +582,18 @@ Let::Let(const AssignmentList &args, Expression *expr, const Location &loc)
 {
 }
 
+const shared_ptr<Expression> &Let::evaluateStep(Context *context) const
+{
+	evaluate_sequential_assignment(this->arguments, context, this->loc);
+	return this->expr;
+}
+
 Value Let::evaluate(const Context *context) const
 {
 	Context c(context);
-	evaluate_sequential_assignment(this->arguments, &c, this->loc);
+	const shared_ptr<Expression> &nextexpr = evaluateStep(&c);
 
-	return this->expr->evaluate(&c);
+	return nextexpr->evaluate(&c);
 }
 
 void Let::print(std::ostream &stream, const std::string &) const

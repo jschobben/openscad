@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <QObject>
 #include <QSet>
 #include "editor.h"
@@ -42,10 +43,12 @@ private:
 
     bool maybeSave(int);
     void saveError(const QIODevice &file, const std::string &msg, EditorInterface *edt);
+	void applyAction(QObject *object, std::function<void(int, EditorInterface *)> func);
 
 private slots:
     void tabSwitched(int);
     void closeTabRequested(int);
+    void middleMouseClicked(int);
 
 private slots:
     void highlightError(int);
@@ -60,13 +63,26 @@ private slots:
     void commentSelection();
     void uncommentSelection();
     void updateActionUndoState();
+    void toggleBookmark();
+    void nextBookmark();
+    void prevBookmark();
+    void jumpToNextError();
+	void copyFileName();
+	void copyFilePath();
+	void closeTab();
+	void launchContextMenu(const QPoint&);
 
     void stopAnimation();
     void updateFindState();
+
+    void onHyperlinkIndicatorClicked(int pos);
 
 public slots:
     void actionNew();
     void setContentRenderState(); // since last render
     void setTabModified(bool, EditorInterface *);
     void saveAll();
+    void closeCurrentTab();
+    void nextTab();
+    void prevTab();
 };

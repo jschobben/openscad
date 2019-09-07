@@ -27,6 +27,7 @@ public:
 
 	// takes Values from other(temporary) Context and performs move into this Context
 	void take_variables(Context &other);
+	void apply_config_variables(const Context &other);
 	const Value& lookup_variable(const std::string &name, bool silent = false, const Location &loc=Location::NONE) const;
 	double lookup_variable_with_default(const std::string &variable, const double &def, const Location &loc=Location::NONE) const;
 	std::string lookup_variable_with_default(const std::string &variable, const std::string &def, const Location &loc=Location::NONE) const;
